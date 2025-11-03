@@ -48,7 +48,6 @@ def extract_profile(driver, profile_name: str = "", profile_url: str = "") -> di
             m = re.search(r"url\(['\"]?(.*?)['\"]?\)", style_str)
             if m:
                 logo_url = m.group(1)
-
     except:
         print("⚠️ Không tìm thấy logo:")
 
@@ -76,23 +75,30 @@ def extract_profile(driver, profile_name: str = "", profile_url: str = "") -> di
         except:
             pass
         
-    desc = ""
+    info = ""
     try:
         el = driver.find_element(By.CSS_SELECTOR, "div#Attribution1 div.widget-content, div.widget-content div.addthis_toolbox")
-        desc = el.text.strip()
+        info = el.text.strip()
     except:
         try:
             # Trường hợp 2: credit hoặc footer
             el = driver.find_element(By.CSS_SELECTOR, "div#credit div.left, footer div.left")
-            desc = el.text.strip()
+            info = el.text.strip()
         except:
             print("⚠️ Không tìm thấy description:")
     return {
         "domain":driver.current_url,
-        "logo":logo_url,
         "name":name,
+        "description":  [],
+        "license":  [],
+        "inforCopyright":info,
+        "editor_in_chief":  [],
+        "address":  [],
+        "phone":  [],
         "email":email,
-        "inforCopyright":desc,
+        "jobId": [],
+        "logo":logo_url,
+
         }
 
 def extract_content(driver) -> dict:
@@ -124,6 +130,23 @@ def extract_content(driver) -> dict:
             src = img.get_attribute("src")
             if src and src not in images: images.append(src)
     except: pass
+
+    categories = []
+    try:
+        els = driver.find_elements(By.CSS_SELECTOR, "a[rel='tag'], div.post-labels a")
+        for el in els:
+            t = (el.text or "").strip()
+            if not t:
+                continue
+            # Một số theme ghi "tag1, tag2" trong cùng thẻ -> tách thêm
+            parts = [p.strip() for p in t.split(",") if p.strip()]
+            categories.extend(parts)
+        # Khử trùng lặp, giữ thứ tự
+        seen = set()
+        categories = [c for c in categories if not (c in seen or seen.add(c))]
+    except Exception:
+        pass
+    
     return {
         "dataSource": base_domain,
         "title":title,
