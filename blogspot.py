@@ -5,7 +5,7 @@ from selenium.webdriver.support import expected_conditions as EC
 import time, re, json
 from urllib.parse import urljoin, urlparse
 from pathlib import Path
-
+import uuid
 NEXT_SELECTORS = [
     "a.blog-pager-older-link",
     "div.separator a[href]",
@@ -25,8 +25,23 @@ def scroll_to_load(driver, times=6, pause=1.0):
         last_h = new_h
 
 def extract_profile(driver, profile_name: str = "", profile_url: str = "") -> dict:
+    job_id = 1 
+    # info = {
+    #     "name": url,
+    #     "description": "",
+    #     "license": None,
+    #     "editor_in_chief": None,
+    #     "address": None,
+    #     "phone": None,
+    #     "email": None,
+    #     "infor_copyright": None,
+    #     "jobId": job_id or str(uuid.uuid4()),
+    #     "logo": None,
+    # }
+
     if profile_url:
         driver.get(profile_url)
+
     else:
         driver.get(f"https://www.google.com/search?q={profile_name}")
     WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "body")))
@@ -34,7 +49,7 @@ def extract_profile(driver, profile_name: str = "", profile_url: str = "") -> di
     
     logo_url = ""
     try:
-        # 1️⃣ Ưu tiên lấy <img src="..."> nếu có
+        # 1️⃣ Ưu tiên lấy logo ở phần header
         try:
             img = driver.find_element(By.CSS_SELECTOR, "div#header-inner img, a#Header1_headerimg img, div.Header img")
             logo_url = img.get_attribute("src") or ""
@@ -43,18 +58,63 @@ def extract_profile(driver, profile_name: str = "", profile_url: str = "") -> di
 
         # 2️⃣ Nếu chưa có, lấy URL từ style background-image
         if not logo_url:
-            el = driver.find_element(By.CSS_SELECTOR, "div#header-inner, div.Header-inner")
-            style_str = el.get_attribute("style") or ""
-            m = re.search(r"url\(['\"]?(.*?)['\"]?\)", style_str)
-            if m:
-                logo_url = m.group(1)
+            try:
+                el = driver.find_element(By.CSS_SELECTOR, "div#header-inner, div.Header-inner")
+                style_str = el.get_attribute("style") or ""
+                m = re.search(r"url\(['\"]?(.*?)['\"]?\)", style_str)
+                if m:
+                    logo_url = m.group(1)
+            except:
+                pass
+
+        # 3️⃣ Nếu vẫn chưa có, lấy ảnh trong widget Profile (phần sidebar)
+        if not logo_url:
+            try:
+                img = driver.find_element(By.CSS_SELECTOR, "div.widget.Profile img.profile-img")
+                logo_url = img.get_attribute("src") or ""
+            except:
+                pass
+
     except:
         print("⚠️ Không tìm thấy logo:")
 
     try:
         name = driver.find_element(By.TAG_NAME, "h1").text.strip()
     except:
-        name = profile_name
+        name = ""
+
+    # 👉 Nếu không có <h1> hoặc text rỗng, fallback theo domain
+    if not name:
+        try:
+            # Ưu tiên dùng profile_url, nếu trống thì lấy current_url
+            u = (profile_url or driver.current_url or "").strip()
+            if not u:
+                name = profile_name
+            else:
+                # Nếu thiếu scheme thì thêm vào
+                if "://" not in u:
+                    u = "https://" + u
+
+                host = (urlparse(u).hostname or "").lower()
+
+                # Bỏ www. nếu có
+                if host.startswith("www."):
+                    host = host[4:]
+
+                # Nếu là blogspot thì lấy phần trước .blogspot.com
+                if host.endswith(".blogspot.com"):
+                    name = host.split(".blogspot.com")[0]
+                else:
+                    # Nếu domain khác thì lấy nhãn đầu tiên
+                    name = host.split(".")[0]
+
+                # Giữ lại chữ, số, gạch ngang và gạch dưới
+                name = re.sub(r"[^a-z0-9_-]", "", name)
+                if not name:
+                    name = profile_name
+        except:
+            name = profile_name
+
 
     email = ""
     try:
@@ -77,26 +137,95 @@ def extract_profile(driver, profile_name: str = "", profile_url: str = "") -> di
         
     info = ""
     try:
-        el = driver.find_element(By.CSS_SELECTOR, "div#Attribution1 div.widget-content, div.widget-content div.addthis_toolbox")
-        info = el.text.strip()
+        # Ưu tiên theo thứ tự:
+        selectors = [
+            "div#Attribution1 div.widget-content, div.widget-content div.addthis_toolbox",  # 1) Attribution / addthis
+            "div#credit div.left, footer div.left",                                         # 2) credit / footer.left
+        ]
+
+        # Thử lần lượt hai nhóm selector trên
+        for sel in selectors:
+            els = driver.find_elements(By.CSS_SELECTOR, sel)
+            for el in els:
+                txt = (el.text or "").strip()
+                if txt:
+                    info = txt
+                    break
+            if info:
+                break
+
+        # 3) Nếu vẫn chưa có, lấy <p> cuối cùng có text trong footer.art-footer
+        if not info:
+            ps = driver.find_elements(By.CSS_SELECTOR, "footer.art-footer div.art-footer-default p")
+            # Duyệt từ cuối lên đầu, lấy thẻ <p> cuối cùng có text
+            for p in reversed(ps):
+                txt = (p.text or "").strip()
+                if txt:
+                    info = txt
+                    break
+
     except:
+        print("⚠️ Không lấy được footer:")
+        info = ""
+
+    # --- Description ---
+    description = ""
+    try:
+        # 1️⃣ Thử lấy nội dung từ thẻ hiển thị
+        el = driver.find_element(By.CSS_SELECTOR, "div.descriptionwrapper p.description span, div.header-widget p")
+        description = (el.text or "").strip()
+    except:
+        pass
+
+    # 2️⃣ Nếu không có, thử lấy từ <meta name="description">
+    if not description:
         try:
-            # Trường hợp 2: credit hoặc footer
-            el = driver.find_element(By.CSS_SELECTOR, "div#credit div.left, footer div.left")
-            info = el.text.strip()
+            meta = driver.find_element(By.CSS_SELECTOR, 'meta[name="description"]')
+            content = meta.get_attribute("content")
+            if content:
+                description = content.strip()
         except:
-            print("⚠️ Không tìm thấy description:")
+            pass
+
+    # 3️⃣ Nếu vẫn không có, fallback sang selector khác (nếu bạn muốn)
+    if not description:
+        try:
+            el = driver.find_element(By.CSS_SELECTOR, "p.description span")
+            description = (el.text or "").strip()
+        except:
+            pass
+
+    # --- Editor ---
+    editor = ""
+    try:
+        # 🧩 Thử lấy tất cả các thẻ <a> trong Attribution hoặc khu vực widget-content
+        anchors = driver.find_elements(
+            By.CSS_SELECTOR,
+            "div.widget.Attribution div.widget-content a, div.widget-content a[href*='theme']"
+        )
+
+        # Lọc text hợp lệ
+        editor_links = [a.text.strip() for a in anchors if a.text.strip()]
+
+        # Ghép thành chuỗi
+        editor = ", ".join(editor_links)
+    except Exception as e:
+        print("⚠️ Không lấy được editor:", e)
+        editor = ""
+
+
+
     return {
         "domain":driver.current_url,
         "name":name,
-        "description":  [],
-        "license":  [],
+        "description":  description,
+        "license":  "",
         "inforCopyright":info,
-        "editor_in_chief":  [],
-        "address":  [],
-        "phone":  [],
+        "editorInChief":  editor,
+        "address":  "",
+        "phone":  "",
         "email":email,
-        "jobId": [],
+        "jobId":str(uuid.uuid4()) or job_id,
         "logo":logo_url,
 
         }

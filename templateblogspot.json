@@ -1,15 +1,15 @@
 {
   "profile": {
     "name":  ["h1"],
-    "description":  [],
-    "license":  [],
-    "editor_in_chief":  [],
+    "description":  ["div.descriptionwrapper p.description span","p.description span"],
+    "license":  ["div.art-footer-default p"],
+    "editor_in_chief":  ["div.widget.Attribution div.widget-content a", "div.widget-content a[href*='theme']"],
     "address":  [],
     "phone":  [],
     "email":  ["a[href^='mailto']"],
-    "infor_copyright":  ["div#Attribution1 div.widget-content", "div.widget-content div.addthis_toolbox", "div#credit div.left", "footer div.left"],
+    "infor_copyright":  ["div#Attribution1 div.widget-content", "div.widget-content div.addthis_toolbox", "div#credit div.left", "footer div.left","footer.art-footer div.art-footer-default p"],
     "jobId": [],
-    "logo":  ["div#header-inner img","a#Header1_headerimg img","div.Header img", "div#header-inner","div.Header-inner"]
+    "logo":  ["div#header-inner img","a#Header1_headerimg img","div.Header img", "div#header-inner","div.Header-inner","div.widget.Profile img.profile-img"]
   },
   "article_data": {
     "dataSource": [],
