@@ -9,11 +9,9 @@ import uuid
 NEXT_SELECTORS = [
     "a.blog-pager-older-link",
     "div.separator a[href]",
-    "a.older-link", "a.older-posts", "a#Blog1_blog-pager-older-link",
-    "a[rel='next']", ".nav-links .next", ".nav-previous a", ".older-posts a",
-    "a.next", "li.next a", ".pagination a.next", ".pagination .nav-previous a",
-    "a[aria-label='Next']", "a[aria-label*='Older']", "a[title*='Older']", "a[title*='Trang sau']",
-]
+    "span.showpageNum a:last-of-type"
+    "div#blog-pager.blog-pager a:last-of-type",
+   ]
 
 def scroll_to_load(driver, times=6, pause=1.0):
     last_h = driver.execute_script("return document.body.scrollHeight")
@@ -74,7 +72,6 @@ def extract_profile(driver, profile_name: str = "", profile_url: str = "") -> di
                 logo_url = img.get_attribute("src") or ""
             except:
                 pass
-
     except:
         print("⚠️ Không tìm thấy logo:")
 
@@ -209,11 +206,8 @@ def extract_profile(driver, profile_name: str = "", profile_url: str = "") -> di
 
         # Ghép thành chuỗi
         editor = ", ".join(editor_links)
-    except Exception as e:
-        print("⚠️ Không lấy được editor:", e)
+    except:
         editor = ""
-
-
 
     return {
         "domain":driver.current_url,
@@ -230,6 +224,18 @@ def extract_profile(driver, profile_name: str = "", profile_url: str = "") -> di
 
         }
 
+
+
+
+
+
+
+
+
+
+
+
+
 def extract_content(driver) -> dict:
     title = author = publishTime = ""
     content, images = "", []
@@ -242,7 +248,7 @@ def extract_content(driver) -> dict:
         title = el.text.strip()
     except: pass
     try:
-        date = driver.find_element(By.CSS_SELECTOR, "h2.date-header, time.published, p.MsoNoSpacing span, abbr.published, div.postmeta-primary span.meta_date")
+        date = driver.find_element(By.CSS_SELECTOR, "h2.date-header, time.published, p.MsoNoSpacing span, abbr.published, div.postmeta-primary span.meta_date, span.art-postdateicon")
         publishTime = (date.text or "").strip()
     except: pass
     try:
@@ -275,16 +281,74 @@ def extract_content(driver) -> dict:
         categories = [c for c in categories if not (c in seen or seen.add(c))]
     except Exception:
         pass
-    
+
+    description = ""
+    try:
+        # Tìm thẻ <b> đầu tiên trong phần nội dung bài viết
+        el = driver.find_element(By.CSS_SELECTOR, "div.post-body.entry-content b, div.art-postcontent h4")
+        description = el.text.strip()
+
+        if not description:
+            meta = driver.find_element(By.CSS_SELECTOR, 'meta[name="description"]')
+            description = (meta.get_attribute("content") or "").strip()
+    except:
+        description = ""
+
+    thumbnails = []
+    try:
+        iframes = driver.find_elements(By.CSS_SELECTOR, "div.separator iframe[src], div.post-body iframe[src]")
+        for iframe in iframes:
+            driver.switch_to.frame(iframe)
+            els = driver.find_elements(By.CSS_SELECTOR, "div.thumbnail-holder[style], div.ytp-cued-thumbnail-overlay-image[style]")
+            for el in els:
+                style = el.get_attribute("style") or ""
+                match = re.search(r'url\(["\']?(.*?)["\']?\)', style)
+                if match:
+                    thumbnails.append(match.group(1).strip())
+            driver.switch_to.default_content()
+    except:
+        thumbnails = []
+
+    video_urls = []
+    try:
+        # 1) Lấy trực tiếp src của các iframe video trong bài
+        for el in driver.find_elements(By.CSS_SELECTOR, "div.separator iframe[src]"):
+            src = (el.get_attribute("src") or "").strip()
+            if src:
+                video_urls.append(src)
+        # 2) Vào các iframe YouTube để lấy link "xem trên YouTube"
+        yt_iframes = driver.find_elements(
+            By.CSS_SELECTOR,
+            "iframe[src*='youtube.com'], iframe[src*='youtube-nocookie.com'], iframe[src*='youtu.be']"
+        )
+        for y in yt_iframes:
+            try:
+                driver.switch_to.frame(y)
+                for a in driver.find_elements(By.CSS_SELECTOR, "a.ytp-impression-link[href]"):
+                    href = (a.get_attribute("href") or "").strip()
+                    if href:
+                        video_urls.append(href)
+                        break
+            finally:
+                driver.switch_to.default_content()
+        video_urls = list(dict.fromkeys(video_urls))
+
+    except:
+        video_urls = []
     return {
         "dataSource": base_domain,
         "title":title,
         "url":driver.current_url,
         "author":author,
+        "authorId":"",
         "publishedDate":publishTime,
+        "description": description,
         "content":content,
         "contentImagesUrls":images,
-        "categories": [tag.text.strip() for tag in driver.find_elements(By.CSS_SELECTOR, "a[rel='tag'], div.post-labels a") if tag.text.strip()]
+        "categories": categories,
+        "thumbnailUrl": thumbnails,
+        "location": "",
+        "videoUrl": video_urls
         }
 
 def get_domain(url: str) -> str:
@@ -299,7 +363,7 @@ def collect_links_on_page(driver, base_url: str, same_domain_only=True, max_link
     base_domain = get_domain(base_url)
     hrefs, seen = [], set()
     scroll_to_load(driver)
-    for a in driver.find_elements(By.CSS_SELECTOR, "h3.post-title a[href], h2.post-title a[href], h2.art-postheader a[href]"):
+    for a in driver.find_elements(By.CSS_SELECTOR, "h3.post-title a[href], h2.post-title.entry-title a, h2.art-postheader a[href]"):
         h = (a.get_attribute("href") or "").strip()
         if not h: continue
         if not h.startswith("http"): h = urljoin(base_url, h)
@@ -386,14 +450,12 @@ def crawl_one_domain(driver, start_url: str, out_path: Path,on_record, same_doma
                 rec = open_article_in_new_tab_and_scrape(driver, link)
                 results.append(rec)
                 seen_links.add(link)
-                # out_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
             except Exception as e:
                 print(f"   🔴 Lỗi bài: {e}")
             rec = open_article_in_new_tab_and_scrape(driver, link)
             results.append(rec)
-            if on_record:              # 👈 thêm dòng này
+            if on_record:
                 on_record({"type": "content", **rec})
-            # out_path.write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8")
         if not go_next_page(driver, visited_pages=visited_listings, wait_secs=10):
             print("✅ Hết pager hoặc không tìm thấy Next Page."); break
 
