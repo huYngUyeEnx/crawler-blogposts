@@ -24,7 +24,7 @@
     "categories": ["a[rel='tag']", "div.post-labels a"],
     "thumbnailUrl": ["div.thumbnail-holder[style]","div.ytp-cued-thumbnail-overlay-image[style]"],
     "location": [],
-    "videoUrl": ["div.separator iframe[src]","div.post-body iframe[src]"]
+    "videoUrl": ["div.separator iframe[src]","div.post-body iframe[src]","a.ytp-impression-link[href]"]
   },
   "article_list": {
     "articleUrl": [

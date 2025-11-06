@@ -224,18 +224,6 @@ def extract_profile(driver, profile_name: str = "", profile_url: str = "") -> di
 
         }
 
-
-
-
-
-
-
-
-
-
-
-
-
 def extract_content(driver) -> dict:
     title = author = publishTime = ""
     content, images = "", []
