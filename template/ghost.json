@@ -1,0 +1,41 @@
+{
+  "profile": {
+    "name":  [],
+    "description":  ["meta[name='description']"],
+    "license":  [],
+    "editor_in_chief":  [],
+    "address":  [],
+    "phone":  [],
+    "email":  [],
+    "infor_copyright":  ["div.footer-copyright","div.gh-copyright"],
+    "jobId": [],
+    "logo":  ["div.header-logo a.is-logo img","a.gh-head-logo img"]
+  },
+  "article_data": {
+    "dataSource": [],
+    "title": ["h1.single-title","h1.gh-article-title","h1.post-title","h1.article-title"],
+    "url": [],
+    "author": ["h4.gh-article-author-name a","span.gh-article-meta a,div.gh-author-name-list a","div.post-meta-content a","h4.author-name a"],
+    "authorId": [],
+    "publishedDate": ["time.gh-article-meta-date","time.byline-meta-date","time.gh-article-meta-date","span.gh-article-meta time","time.gh-article-date","div.post-meta-content time","span.post-meta-date time"],
+    "description": ["meta[name='description']", "meta[property='og:description']"],
+    "content": ["div.post-content p","section.gh-content","div.gh-content"],
+    "contentImageUrls": [""],
+    "categories": ["a.gh-article-tag","div.post-tags a","span.post-card-primary-tag a "],
+    "thumbnailUrl": ["figure.kg-embed-card iframe div.ytp-cued-thumbnail-overlay-image[style]","figure.kg-embed-card iframe div.js-reframe iframe","div.ytp-cued-thumbnail-overlay-image[style]"],
+    "location": [],
+    "videoUrl": ["div.ytp-title-text a.ytp-title-link[href]","figure.kg-card.kg-video-card video[src]"]
+  },
+  "article_list": {
+    "articleUrl": [
+      "div.item-content h2.item-title a[href]",
+      "h2.post-title a.post-title-link[href]",
+      "a,post-card-content-link[href]",
+      "a.gh-card-link[href]",
+      "a.u-permalink[href]"
+    ],
+    "nextPage": [
+     "link[rel='next'][href]"
+    ]
+  }
+}
